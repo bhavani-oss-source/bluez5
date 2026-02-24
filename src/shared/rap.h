@@ -10,6 +10,7 @@
 
 #include "src/shared/io.h"
 
+#include "rap_hci.h"
 struct bt_rap;
 
 typedef void (*bt_rap_debug_func_t)(const char *str, void *user_data);
@@ -43,3 +44,4 @@ bool bt_rap_ready_unregister(struct bt_rap *rap, unsigned int id);
 bool bt_rap_unregister(unsigned int id);
 
 struct bt_rap *bt_rap_new(struct gatt_db *ldb, struct gatt_db *rdb);
+bool bt_rap_init_raw_channel(struct bt_rap *rap, uint16_t hci_index);

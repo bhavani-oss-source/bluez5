@@ -62,7 +62,7 @@ struct bt_rap {
 	struct bt_att *att;
 
 	unsigned int idle_id;
-
+	struct bt_hci *raw_hci;
 	struct queue *notify;
 	struct queue *pending;
 	struct queue *ready_cbs;
@@ -685,6 +685,23 @@ bool bt_rap_ready_unregister(struct bt_rap *rap, unsigned int id)
 	return true;
 }
 
+bool bt_rap_init_raw_channel(struct bt_rap *rap, uint16_t hci_index)
+{
+    if (!rap)
+        return false;
+ 
+    /* Create raw channel for direct HCI access */
+    rap->raw_hci = bt_hci_new_raw_device(hci_index);
+    if (!rap->raw_hci) {
+        error("Failed to create HCI RAW channel for hci%u", hci_index);
+        return false;
+    }
+ 
+    error("HCI raw channel initialized for hci%u", hci_index);
+	bt_rap_register_hci_events(rap->raw_hci);
+ 
+    return true;
+}
 static struct bt_rap *bt_rap_ref_safe(struct bt_rap *rap)
 {
 	if (!rap || !rap->ref_count)

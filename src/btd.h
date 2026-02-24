@@ -108,6 +108,12 @@ struct btd_csis {
 	uint8_t rank;
 };
 
+struct btd_le_bcs {
+	uint8_t role;
+	uint8_t cs_sync_ant_sel;
+	int8_t max_tx_power;
+};
+
 struct btd_avdtp_opts {
 	uint8_t  session_mode;
 	uint8_t  stream_mode;
@@ -170,6 +176,8 @@ struct btd_opts {
 	struct btd_advmon_opts	advmon;
 
 	struct btd_csis csis;
+
+	struct btd_le_bcs bcs;
 };
 
 extern struct btd_opts btd_opts;

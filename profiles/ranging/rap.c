@@ -173,6 +173,7 @@ static int rap_probe(struct btd_service *service)
 	struct btd_gatt_database *database = btd_adapter_get_database(adapter);
 	struct rap_data *data = btd_service_get_user_data(service);
 	char addr[18];
+	uint16_t hci_index;
 
 	ba2str(device_get_address(device), addr);
 	DBG("%s", addr);
@@ -193,6 +194,13 @@ static int rap_probe(struct btd_service *service)
 		error("unable to create RAP instance");
 		free(data);
 		return -EINVAL;
+	}
+ 
+	hci_index = btd_adapter_get_index(adapter);
+	if (bt_rap_init_raw_channel(data->rap, hci_index)) {
+		DBG("HCI raw channel initialized for monitoring");
+	}else {
+		error("HCI raw channel not available (may be in use)");
 	}
 
 	rap_data_add(data);

@@ -155,6 +155,13 @@ static const char *gatt_options[] = {
 	NULL
 };
 
+static const char *bcs_options[] = {
+	"Role",
+	"CcSyncAntennaSel",
+	"MaxTxPower",
+	NULL
+};
+
 static const char *csip_options[] = {
 	"SIRK",
 	"Encryption",
@@ -189,6 +196,7 @@ static const struct group_table {
 	{ "LE",		le_options },
 	{ "Policy",	policy_options },
 	{ "GATT",	gatt_options },
+	{ "ChannelSounding",	bcs_options },
 	{ "CSIS",	csip_options },
 	{ "AVDTP",	avdtp_options },
 	{ "AVRCP",	avrcp_options },
@@ -489,6 +497,47 @@ static bool parse_config_int(GKeyFile *config, const char *group,
 		*val = tmp;
 
 	return true;
+}
+
+static bool parse_config_signed_int(GKeyFile *config, const char *group,
+					const char *key, int8_t *val,
+					size_t min, size_t max)
+{
+	char *str = NULL;
+	char *endptr = NULL;
+	long tmp;
+	bool result = false;
+
+	str = g_key_file_get_string(config, group, key, NULL);
+	if (!str) {
+		return false; // Key not found
+	}
+
+	tmp = strtol(str, &endptr, 0);
+	if (!endptr || *endptr != '\0') {
+		error("%s.%s = %s is not integer", group, key, str);
+		goto cleanup;
+	}
+
+	if (tmp < INT8_MIN) {
+		warn("%s.%s = %d is out of range (< %d)", group, key, tmp,
+				min);
+		goto cleanup;
+	}
+
+	if (tmp > INT8_MAX) {
+		warn("%s.%s = %d is out of range (> %d)", group, key, tmp,
+				max);
+		goto cleanup;
+	}
+
+	if (val)
+		*val = (int8_t)tmp;
+	result = true;
+
+cleanup:
+	g_free(str);
+	return result;
 }
 
 struct config_param {
@@ -1150,6 +1199,23 @@ static void parse_csis(GKeyFile *config)
 					0, UINT8_MAX);
 }
 
+static void parse_le_cs_config(GKeyFile *config)
+{
+	warn("Channel Sounding parse config - entry1");
+	parse_config_u8(config, "ChannelSounding", "Role", &btd_opts.bcs.role, 0, 1);
+	parse_config_u8(config, "ChannelSounding", "CcSyncAntennaSel", &btd_opts.bcs.cs_sync_ant_sel,
+				0x01, 0xFF);
+	warn("Channel Sounding parse config - entry2");
+	parse_config_signed_int(config, "ChannelSounding",
+							"MaxTxPower", &btd_opts.bcs.max_tx_power, INT8_MIN, INT8_MAX);
+
+	if (btd_opts.mode == BT_MODE_BREDR)
+		return;
+
+	warn("Channel Sounding parse config - exit");
+
+}
+
 static void parse_avdtp_session_mode(GKeyFile *config)
 {
 	char *str = NULL;
@@ -1224,6 +1290,7 @@ static void parse_config(GKeyFile *config)
 	parse_general(config);
 	parse_br_config(config);
 	parse_le_config(config);
+	parse_le_cs_config(config);
 	parse_gatt(config);
 	parse_csis(config);
 	parse_avdtp(config);
@@ -1269,7 +1336,9 @@ static void init_defaults(void)
 	btd_opts.gatt_channels = 1;
 	btd_opts.gatt_client = true;
 	btd_opts.gatt_export = BT_GATT_EXPORT_READ_ONLY;
-
+	btd_opts.bcs.role = 0x00;
+	btd_opts.bcs.cs_sync_ant_sel = 0xFF;
+	btd_opts.bcs.max_tx_power = 0x14;
 	btd_opts.avdtp.session_mode = BT_IO_MODE_BASIC;
 	btd_opts.avdtp.stream_mode = BT_IO_MODE_BASIC;
 
