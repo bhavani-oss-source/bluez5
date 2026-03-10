@@ -8,7 +8,18 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
-#include "src/shared/io.h"
+#include "bluetooth/bluetooth.h"
+#include "bluetooth/mgmt.h"
+#include "bluetooth/uuid.h"
+#include "src/shared/hci.h"
+#include "src/shared/queue.h"
+#include "src/shared/rap_utils.h"
+#include "src/shared/timeout.h"
+#include "src/shared/att.h"
+#include "src/shared/mgmt.h"
+#include "src/shared/gatt-db.h"
+#include "src/shared/gatt-server.h"
+#include "src/shared/gatt-client.h"
 
 struct bt_rap;
 
@@ -43,3 +54,12 @@ bool bt_rap_ready_unregister(struct bt_rap *rap, unsigned int id);
 bool bt_rap_unregister(unsigned int id);
 
 struct bt_rap *bt_rap_new(struct gatt_db *ldb, struct gatt_db *rdb);
+/*HCI Raw Channel Approach */
+bool bt_rap_init_raw_channel(struct bt_rap *rap,uint16_t hci_index);
+void bt_rap_register_hci_events(struct bt_rap *rap, struct bt_hci *hci, struct rap_utils *utils);
+void cs_config_complete_callback(uint16_t index, uint16_t length, const void *param, void *user_data);
+void cs_sec_enable_complete_callback(uint16_t index, uint16_t length, const void *param, void *user_data);
+void cs_procedure_enable_complete_callback(uint16_t index, uint16_t length, const void *param, void *user_data);
+void cs_subevent_result_callback(uint16_t index, uint16_t length, const void *param, void *user_data);
+void cs_subevent_result_cont_callback(uint16_t index, uint16_t length,
+                                             const void *param, void *user_data);

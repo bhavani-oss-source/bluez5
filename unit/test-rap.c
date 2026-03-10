@@ -18,15 +18,7 @@
 
 #include <glib.h>
 
-#include "bluetooth/bluetooth.h"
-#include "bluetooth/uuid.h"
-#include "src/shared/util.h"
 #include "src/shared/tester.h"
-#include "src/shared/queue.h"
-#include "src/shared/att.h"
-#include "src/shared/gatt-db.h"
-#include "src/shared/gatt-server.h"
-#include "src/shared/gatt-client.h"
 #include "src/shared/rap.h"
 
 struct test_data_ras {

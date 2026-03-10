@@ -26,20 +26,20 @@
 #include "src/service.h"
 #include "src/gatt-database.h"
 #include "attrib/gattrib.h"
-#include "src/shared/util.h"
-#include "src/shared/queue.h"
-#include "src/shared/att.h"
-#include "src/shared/gatt-db.h"
-#include "src/shared/gatt-client.h"
 #include "src/shared/rap.h"
 #include "attrib/att.h"
 #include "src/log.h"
 
+#define USE_BT_HCI_RAW_CHANNEL	1
 struct rap_data {
 	struct btd_device *device;
 	struct btd_service *service;
 	struct bt_rap *rap;
 	unsigned int ready_id;
+#if USE_BT_HCI_RAW_CHANNEL
+	struct bt_hci *hci;
+	unsigned int hci_event_id;
+#endif
 };
 
 static struct queue *sessions;
@@ -95,6 +95,13 @@ static void rap_data_free(struct rap_data *data)
 	}
 
 	bt_rap_ready_unregister(data->rap, data->ready_id);
+#if USE_BT_HCI_RAW_CHANNEL
+	if (data->hci) {
+		if (data->hci_event_id)
+			bt_hci_unregister(data->hci, data->hci_event_id);
+		bt_hci_unref(data->hci);
+	}
+#endif
 	bt_rap_unref(data->rap);
 	free(data);
 }
@@ -194,7 +201,16 @@ static int rap_probe(struct btd_service *service)
 		free(data);
 		return -EINVAL;
 	}
-
+#if USE_BT_HCI_RAW_CHANNEL
+	int16_t hci_index = btd_adapter_get_index(adapter);
+	if (bt_rap_init_raw_channel(data->rap,  hci_index)) {
+		DBG("HCI raw channel initialized, hci%d", hci_index);
+	} else {
+		error("HCI raw channel not available (may be in use)");
+	}
+#else /* USE_BT_HCI_RAW_CHANNEL */
+	DBG("MGMT Events");
+#endif /* USE_BT_HCI_RAW_CHANNEL */
 	rap_data_add(data);
 
 	data->ready_id = bt_rap_ready_register(data->rap, rap_ready, service,

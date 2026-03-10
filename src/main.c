@@ -45,8 +45,9 @@
 #include "shared/timeout.h"
 #include "shared/queue.h"
 #include "shared/crypto.h"
+#include "shared/rap_hci.h"
 #include "bluetooth/uuid.h"
-#include "shared/util.h"
+
 #include "btd.h"
 #include "sdpd.h"
 #include "adapter.h"
@@ -65,6 +66,7 @@
 #define SHUTDOWN_GRACE_SECONDS 10
 
 struct btd_opts btd_opts;
+struct cs_options cs_opt;
 static GKeyFile *main_conf;
 static char main_conf_file_path[PATH_MAX];
 
@@ -155,6 +157,12 @@ static const char *gatt_options[] = {
 	NULL
 };
 
+static const char *bcs_options[] = {
+	"Role",
+	"CcSyncAntennaSel",
+	"MaxTxPower",
+	NULL
+};
 static const char *csip_options[] = {
 	"SIRK",
 	"Encryption",
@@ -192,6 +200,7 @@ static const struct group_table {
 	{ "CSIS",	csip_options },
 	{ "AVDTP",	avdtp_options },
 	{ "AVRCP",	avrcp_options },
+	{ "ChannelSounding",	bcs_options },
 	{ "AdvMon",	advmon_options },
 	{ }
 };
@@ -491,6 +500,40 @@ static bool parse_config_int(GKeyFile *config, const char *group,
 	return true;
 }
 
+static bool parse_config_signed_int(GKeyFile *config, const char *group,
+					const char *key, int8_t *val,
+					size_t min, size_t max)
+{
+	char *str = NULL;
+    char *endptr = NULL;
+    long tmp;
+	bool result = false;
+    str = g_key_file_get_string(config, group, key, NULL);
+    if (!str) {
+        return false; // Key not found
+    }
+	tmp = strtol(str, &endptr, 0);
+	if (!endptr || *endptr != '\0') {
+		error("%s.%s = %s is not integer", group, key, str);
+		goto cleanup;
+	}
+	if (tmp < INT8_MIN) {
+		warn("%s.%s = %d is out of range (< %d)", group, key, tmp,
+									min);
+		goto cleanup;
+	}
+	if (tmp > INT8_MAX) {
+		warn("%s.%s = %d is out of range (> %d)", group, key, tmp,
+									max);
+		goto cleanup;
+	}
+	if (val)
+		*val = (int8_t)tmp;
+	result = true;
+cleanup:
+    g_free(str);
+    return result;
+}
 struct config_param {
 	const char * const val_name;
 	void * const val;
@@ -1150,6 +1193,17 @@ static void parse_csis(GKeyFile *config)
 					0, UINT8_MAX);
 }
 
+static void parse_le_cs_config(GKeyFile *config)
+{
+	memset(&cs_opt, 0, sizeof(cs_opt));
+	parse_config_u8(config, "ChannelSounding", "Role", &cs_opt.role, 0, 3);
+	parse_config_u8(config, "ChannelSounding", "CcSyncAntennaSel", &cs_opt.cs_sync_ant_sel,
+				0x01, 0xFF);
+	parse_config_signed_int(config, "ChannelSounding",
+							"MaxTxPower", &cs_opt.max_tx_power, INT8_MIN, INT8_MAX);
+	if (btd_opts.mode == BT_MODE_BREDR)
+		return;
+}
 static void parse_avdtp_session_mode(GKeyFile *config)
 {
 	char *str = NULL;
@@ -1228,6 +1282,7 @@ static void parse_config(GKeyFile *config)
 	parse_csis(config);
 	parse_avdtp(config);
 	parse_avrcp(config);
+	parse_le_cs_config(config);
 	parse_advmon(config);
 }
 

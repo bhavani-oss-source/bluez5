@@ -1107,6 +1107,130 @@ struct mgmt_ev_mesh_pkt_cmplt {
 	uint8_t	handle;
 } __packed;
 
+/* Channel Sounding Events */
+#define CS_MODE_ZERO			0x00
+#define CS_MODE_ONE				0x01
+#define CS_MODE_TWO				0x02
+#define CS_MODE_THREE			0x03
+#define CS_REFLECTOR			0x01
+#define CS_INITIATOR			0x00
+#define CS_MAX_ANT_PATHS		0x05
+#define CS_MAX_STEPS			0xA0
+#define CS_MAX_STEP_DATA_LEN	0xFF
+#define MGMT_EV_CS_CONFIG_CMPLT		0x0036
+struct mgmt_ev_cs_config_cmplt {
+	uint8_t		status;
+	uint16_t	conn_hdl;
+	uint8_t		config_id;
+	uint8_t		action;
+	uint8_t		main_mode_type;
+	uint8_t		sub_mode_type;
+	uint8_t		min_main_mode_steps;
+	uint8_t		max_main_mode_steps;
+	uint8_t		main_mode_rep;
+	uint8_t		mode_0_steps;
+	uint8_t		role;
+	uint8_t		rtt_type;
+	uint8_t		cs_sync_phy;
+	uint8_t		channel_map[10];
+	uint8_t		channel_map_rep;
+	uint8_t		channel_sel_type;
+	uint8_t		ch3c_shape;
+	uint8_t		ch3c_jump;
+	uint8_t		reserved;
+	uint8_t		t_ip1_time;
+	uint8_t		t_ip2_time;
+	uint8_t		t_fcs_time;
+	uint8_t		t_pm_time;
+} __packed;
+#define MGMT_EV_CS_SEC_ENABLE_CMPLT		0x0037
+struct mgmt_ev_cs_sec_enable_cmplt {
+	uint8_t		status;
+	uint16_t	conn_hdl;
+} __packed;
+#define MGMT_EV_CS_PROC_ENABLE_CMPLT		0x0038
+struct mgmt_ev_cs_proc_enable_cmplt {
+	uint8_t		status;
+	uint16_t	conn_hdl;
+	uint8_t		config_id;
+	uint8_t		state;
+	uint8_t		tone_ant_config_sel;
+	int8_t		sel_tx_pwr;
+	uint8_t		sub_evt_len[3];
+	uint8_t		sub_evts_per_evt;
+	uint16_t	sub_evt_intrvl;
+	uint16_t	evt_intrvl;
+	uint16_t	proc_intrvl;
+	uint16_t	proc_counter;
+	uint16_t	max_proc_len;
+} __packed;
+#define MGMT_EV_CS_SUBEVENT_RESULT		0x0039
+struct pct_iq_sample {
+	int16_t	i_sample;
+	int16_t	q_sample;
+} __packed;
+struct cs_mode_zero_data {
+	uint8_t		packet_quality;
+	uint8_t		packet_rssi_dbm;
+	uint8_t		packet_ant;
+	uint32_t	init_measured_freq_offset;
+} __packed;
+struct cs_mode_one_data {
+	uint8_t					packet_quality;
+	uint8_t					packet_rssi_dbm;
+	uint8_t					packet_ant;
+	uint8_t					packet_nadm;
+	int16_t					toa_tod_init;
+	int16_t					tod_toa_refl;
+	struct pct_iq_sample	packet_pct1;
+	struct pct_iq_sample	packet_pct2;
+} __packed;
+struct cs_mode_two_data {
+	uint8_t					ant_perm_index;
+	struct pct_iq_sample	tone_pct[4];
+	uint8_t					tone_quality_indicator[4];
+} __packed;
+struct cs_mode_three_data {
+	struct cs_mode_one_data	mode_one_data;
+	struct cs_mode_two_data	mode_two_data;
+} __packed;
+union cs_mode_data {
+	struct cs_mode_zero_data	mode_zero_data;
+	struct cs_mode_one_data		mode_one_data;
+	struct cs_mode_two_data		mode_two_data;
+	struct cs_mode_three_data	mode_three_data;
+};
+struct cs_step_data {
+	uint8_t					step_mode;
+	uint8_t					step_chnl;
+	uint8_t					step_data_length;
+	union cs_mode_data		step_mode_data;
+} __packed;
+struct mgmt_ev_cs_subevent_result {
+	uint16_t				conn_hdl;
+	uint8_t					config_id;
+	uint16_t				start_acl_conn_evt_counter;
+	uint16_t				proc_counter;
+	uint16_t				freq_comp;
+	uint8_t					ref_pwr_lvl;
+	uint8_t					proc_done_status;
+	uint8_t					subevt_done_status;
+	uint8_t					abort_reason;
+	uint8_t					num_ant_paths;
+	uint8_t					num_steps_reported;
+	struct cs_step_data		step_data[0] ;
+} __packed;
+#define MGMT_EV_CS_SUBEVENT_RESULT_CONT		0x003A
+struct mgmt_ev_cs_subevent_result_cont {
+	uint16_t				conn_hdl;
+	uint8_t					config_id;
+	uint8_t					proc_done_status;
+	uint8_t					subevt_done_status;
+	uint8_t					abort_reason;
+	uint8_t					num_ant_paths;
+	uint8_t					num_steps_reported;
+	struct cs_step_data		step_data[0];
+} __packed;
 static const char *mgmt_op[] = {
 	"<0x0000>",
 	"Read Version",
