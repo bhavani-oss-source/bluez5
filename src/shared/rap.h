@@ -9,8 +9,10 @@
 #include <inttypes.h>
 
 #include "src/shared/io.h"
+#include "src/shared/hci.h"
 
 struct bt_rap;
+struct rap_utils;
 
 typedef void (*bt_rap_debug_func_t)(const char *str, void *user_data);
 typedef void (*bt_rap_ready_func_t)(struct bt_rap *rap, void *user_data);
@@ -42,4 +44,21 @@ bool bt_rap_ready_unregister(struct bt_rap *rap, unsigned int id);
 
 bool bt_rap_unregister(unsigned int id);
 
-struct bt_rap *bt_rap_new(struct gatt_db *ldb, struct gatt_db *rdb);
+struct bt_rap *bt_rap_new(struct gatt_db *ldb, struct gatt_db *rdb, uint8_t role,
+		uint8_t cs_sync_ant_sel, int8_t max_tx_power);
+
+/*HCI Raw Channel Approach */
+bool bt_rap_init_raw_channel(struct bt_rap *rap,uint16_t hci_index);
+void bt_rap_hci_sm_cleanup();
+void bt_rap_hci_register_events(struct bt_rap *rap, struct bt_hci *hci,
+		struct rap_utils *utils);
+void bt_rap_hci_cs_config_complete_callback(uint16_t index, uint16_t length,
+		const void *param, void *user_data);
+void bt_rap_hci_cs_sec_enable_complete_callback(uint16_t index, uint16_t length,
+		const void *param, void *user_data);
+void bt_rap_hci_cs_procedure_enable_complete_callback(uint16_t index, uint16_t length,
+		const void *param, void *user_data);
+void bt_rap_hci_cs_subevent_result_callback(uint16_t index, uint16_t length,
+		const void *param, void *user_data);
+void bt_rap_hci_cs_subevent_result_cont_callback(uint16_t index, uint16_t length,
+		const void *param, void *user_data);

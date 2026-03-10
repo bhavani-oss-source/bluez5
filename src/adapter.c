@@ -341,6 +341,10 @@ struct btd_adapter {
 
 	struct queue *exp_pending;
 	struct queue *exps;
+
+	unsigned int bcs_role;
+	unsigned int bcs_sync_ant_sel;
+	signed int bcs_max_tx_power;
 };
 
 static char *adapter_power_state_str(uint32_t power_state)
@@ -4978,6 +4982,38 @@ done:
 	mgmt_tlv_list_free(list);
 }
 
+static void load_bcs_defaults(struct btd_adapter *adapter)
+{
+	struct btd_le_bcs bcs = btd_opts.defaults.bcs;
+	adapter->bcs_role = bcs.role;
+	adapter->bcs_sync_ant_sel = bcs.cs_sync_ant_sel;
+	adapter->bcs_max_tx_power = bcs.max_tx_power;
+}
+
+uint8_t btd_adapter_get_bcs_ant_sel(struct btd_adapter *adapter)
+{
+	uint8_t ant_unknown = 0x00;
+	if (!adapter)
+		return ant_unknown;
+	return adapter->bcs_sync_ant_sel;
+}
+
+int8_t btd_adapter_get_bcs_tx_pwr(struct btd_adapter *adapter)
+{
+	int8_t tx_pwr_unknown = 0xFF;
+	if (!adapter)
+		return tx_pwr_unknown;
+	return adapter->bcs_max_tx_power;
+}
+
+uint8_t btd_adapter_get_bcs_role(struct btd_adapter *adapter)
+{
+	uint8_t role_unknown = 0xFF;
+	if (!adapter)
+		return role_unknown;
+	return adapter->bcs_role;
+}
+
 static void load_devices(struct btd_adapter *adapter)
 {
 	char dirname[PATH_MAX];
@@ -9460,6 +9496,7 @@ load:
 	btd_profile_foreach(probe_profile, adapter);
 	clear_blocked(adapter);
 	load_defaults(adapter);
+	load_bcs_defaults(adapter);
 	load_devices(adapter);
 
 	/* restore Service Changed CCC value for bonded devices */

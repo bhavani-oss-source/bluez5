@@ -16,7 +16,6 @@
 
 #include "bluetooth/bluetooth.h"
 #include "bluetooth/uuid.h"
-
 #include "src/shared/queue.h"
 #include "src/shared/util.h"
 #include "src/shared/timeout.h"
@@ -25,9 +24,8 @@
 #include "src/shared/gatt-server.h"
 #include "src/shared/gatt-client.h"
 #include "src/shared/rap.h"
-
-#define DBG(_rap, fmt, arg...) \
-	rap_debug(_rap, "%s:%s() " fmt, __FILE__, __func__, ## arg)
+#include "src/shared/rap_hci.h"
+#include "src/shared/rap_utils.h"
 
 #define RAS_UUID16			0x185B
 
@@ -61,16 +59,17 @@ struct bt_rap {
 	struct bt_gatt_client *client;
 	struct bt_att *att;
 
+	int hci_index;
+	struct bt_hci *raw_hci;
 	unsigned int idle_id;
 
 	struct queue *notify;
 	struct queue *pending;
 	struct queue *ready_cbs;
 
-	bt_rap_debug_func_t debug_func;
-	bt_rap_destroy_func_t debug_destroy;
-	void *debug_data;
 	void *user_data;
+	struct rap_utils *utils;
+
 };
 
 static struct queue *rap_db;
@@ -209,36 +208,20 @@ void bt_rap_unref(struct bt_rap *rap)
 
 	if (__sync_sub_and_fetch(&rap->ref_count, 1))
 		return;
-
+	bt_rap_hci_sm_cleanup();
 	rap_free(rap);
 }
 
-static void rap_debug(struct bt_rap *rap, const char *format, ...)
-{
-	va_list ap;
 
-	if (!rap || !format || !rap->debug_func)
-		return;
-
-	va_start(ap, format);
-	util_debug_va(rap->debug_func, rap->debug_data, format, ap);
-	va_end(ap);
-}
 
 bool bt_rap_set_debug(struct bt_rap *rap, bt_rap_debug_func_t func,
 			void *user_data, bt_rap_destroy_func_t destroy)
 {
 	if (!rap)
 		return false;
-
-	if (rap->debug_destroy)
-		rap->debug_destroy(rap->debug_data);
-
-	rap->debug_func = func;
-	rap->debug_destroy = destroy;
-	rap->debug_data = user_data;
-
-	return true;
+	
+	bool ret = rap_utils_set_debug(rap->utils, func, user_data, destroy);
+	return ret;
 }
 
 static void ras_features_read_cb(struct gatt_db_attribute *attrib,
@@ -504,7 +487,33 @@ bool bt_rap_unregister(unsigned int id)
 	return true;
 }
 
-struct bt_rap *bt_rap_new(struct gatt_db *ldb, struct gatt_db *rdb)
+void bt_rap_hci_cs_subevent_result_cont_callback(uint16_t index, uint16_t length,
+			const void *param, void *user_data)
+{
+}
+
+void bt_rap_hci_cs_subevent_result_callback(uint16_t index, uint16_t length,
+			const void *param, void *user_data)
+{
+}
+
+void bt_rap_hci_cs_procedure_enable_complete_callback(uint16_t index, uint16_t length,
+			const void *param, void *user_data)
+{
+}
+
+void bt_rap_hci_cs_sec_enable_complete_callback(uint16_t index, uint16_t length,
+			const void *param, void *user_data)
+{
+}
+
+void bt_rap_hci_cs_config_complete_callback(uint16_t index, uint16_t length,
+			const void *param, void *user_data)
+{
+}
+
+struct bt_rap *bt_rap_new(struct gatt_db *ldb, struct gatt_db *rdb, uint8_t role,
+		uint8_t cs_sync_ant_sel, int8_t max_tx_power)
 {
 	struct bt_rap *rap;
 	struct bt_rap_db *rapdb;
@@ -521,6 +530,7 @@ struct bt_rap *bt_rap_new(struct gatt_db *ldb, struct gatt_db *rdb)
 	rap->pending = queue_new();
 	rap->ready_cbs = queue_new();
 	rap->notify = queue_new();
+	rap->utils = new0(struct rap_utils, 1);
 
 	if (!rdb)
 		goto done;
@@ -529,6 +539,7 @@ struct bt_rap *bt_rap_new(struct gatt_db *ldb, struct gatt_db *rdb)
 	rapdb->db = gatt_db_ref(rdb);
 
 	rap->rrapdb = rapdb;
+	bt_rap_hci_set_le_bcs_options(role, cs_sync_ant_sel, max_tx_power);
 
 done:
 	bt_rap_ref(rap);
@@ -561,7 +572,7 @@ static void foreach_rap_char(struct gatt_db_attribute *attr, void *user_data)
 	bt_uuid16_create(&uuid_overwritten, RAS_DATA_OVERWRITTEN_UUID);
 
 	if (!bt_uuid_cmp(&uuid, &uuid_features)) {
-		DBG(rap, "Features characteristic found: handle 0x%04x",
+		DBG(rap->utils, "Features characteristic found: handle 0x%04x",
 		    value_handle);
 
 		ras = rap_get_ras(rap);
@@ -572,7 +583,7 @@ static void foreach_rap_char(struct gatt_db_attribute *attr, void *user_data)
 	}
 
 	if (!bt_uuid_cmp(&uuid, &uuid_realtime)) {
-		DBG(rap, "Real Time Data characteristic found: handle 0x%04x",
+		DBG(rap->utils, "Real Time Data characteristic found: handle 0x%04x",
 		    value_handle);
 
 		ras = rap_get_ras(rap);
@@ -583,7 +594,7 @@ static void foreach_rap_char(struct gatt_db_attribute *attr, void *user_data)
 	}
 
 	if (!bt_uuid_cmp(&uuid, &uuid_ondemand)) {
-		DBG(rap, "On-demand Data characteristic found: handle 0x%04x",
+		DBG(rap->utils, "On-demand Data characteristic found: handle 0x%04x",
 		    value_handle);
 
 		ras = rap_get_ras(rap);
@@ -594,7 +605,7 @@ static void foreach_rap_char(struct gatt_db_attribute *attr, void *user_data)
 	}
 
 	if (!bt_uuid_cmp(&uuid, &uuid_cp)) {
-		DBG(rap, "Control Point characteristic found: handle 0x%04x",
+		DBG(rap->utils, "Control Point characteristic found: handle 0x%04x",
 		    value_handle);
 
 		ras = rap_get_ras(rap);
@@ -605,7 +616,7 @@ static void foreach_rap_char(struct gatt_db_attribute *attr, void *user_data)
 	}
 
 	if (!bt_uuid_cmp(&uuid, &uuid_dataready)) {
-		DBG(rap, "Data Ready characteristic found: handle 0x%04x",
+		DBG(rap->utils, "Data Ready characteristic found: handle 0x%04x",
 		    value_handle);
 
 		ras = rap_get_ras(rap);
@@ -616,7 +627,7 @@ static void foreach_rap_char(struct gatt_db_attribute *attr, void *user_data)
 	}
 
 	if (!bt_uuid_cmp(&uuid, &uuid_overwritten)) {
-		DBG(rap, "Overwritten characteristic found: handle 0x%04x",
+		DBG(rap->utils, "Overwritten characteristic found: handle 0x%04x",
 		    value_handle);
 
 		ras = rap_get_ras(rap);
@@ -650,7 +661,7 @@ unsigned int bt_rap_ready_register(struct bt_rap *rap,
 	if (!rap)
 		return 0;
 
-	DBG(rap, "bt_rap_ready_register");
+	DBG(rap->utils, "bt_rap_ready_register");
 
 	ready = new0(struct bt_rap_ready, 1);
 	ready->id = ++id ? id : ++id;
@@ -685,6 +696,22 @@ bool bt_rap_ready_unregister(struct bt_rap *rap, unsigned int id)
 	return true;
 }
 
+bool bt_rap_init_raw_channel(struct bt_rap *rap, uint16_t hci_index)
+{
+	if (!rap)
+		return false;
+	rap->raw_hci = bt_hci_new_raw_device(hci_index);
+
+	if (!rap->raw_hci) {
+		DBG(rap->utils,"Failed to create HCI RAW channel for hci%u", hci_index);
+		bt_hci_unref(rap->raw_hci);
+		return false;
+    }
+	rap->hci_index = hci_index;
+	DBG(rap->utils,"HCI raw channel initialized for hci%u", hci_index);
+	bt_rap_hci_register_events(rap, rap->raw_hci, rap->utils);
+	return true;
+}
 static struct bt_rap *bt_rap_ref_safe(struct bt_rap *rap)
 {
 	if (!rap || !rap->ref_count)
